@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ktspy"
+version = "0.1.0"
+description = "k top scoring pairs (k-TSP): rank-based classifiers for single samples, binary and multiclass"
+authors = [{ name = "H. Carlo Maurer", email = "h.carlo.maurer@gmail.com" }]
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+keywords = ["k-TSP", "top-scoring-pairs", "classification", "gene-expression", "single-sample", "switchBox"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+dependencies = [
+    "numpy>=1.22",
+    "scipy>=1.9",
+    "pandas>=2.0",
+    "scikit-learn>=1.6",   # estimator API (validate_data, sklearn tags)
+]
+
+[project.optional-dependencies]
+r = ["rpy2>=3.5"]          # only for the equivalence tests against Bioconductor switchBox
+test = ["pytest>=7"]
+
+[project.urls]
+Repository = "https://github.com/fossbert/ktspy"
+Issues = "https://github.com/fossbert/ktspy/issues"
+
+[tool.setuptools.packages.find]
+include = ["ktspy*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
