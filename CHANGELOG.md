@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- `feature_groups` (`KTSP`, `KTSPClassifier`, `MultiKTSPClassifier`): one label per feature; pairs are formed
+  only within a group (same scale), the groups compete by TSP score; `prefilter` per group (int or dict);
+  `pair_groups_`, a `group` column in `get_pairs()` / `rules_`.
+
 ## 0.1.0
 
 - Binary k-TSP (`KTSP`, `KTSPClassifier`, `tsp_scores`, `wilcoxon_filter`), moved unchanged from

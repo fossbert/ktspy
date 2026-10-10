@@ -253,16 +253,18 @@ class _KTSPBase(BaseEstimator):
         self,
         k: Union[int, Sequence[int]] = 10,
         *,
-        prefilter: Union[int, None] = None,
+        prefilter: Union[int, dict, None] = None,
         updown: bool = True,
         handle_ties: bool = False,
         disjoint: bool = True,
+        feature_groups=None,
     ):
         self.k = k
         self.prefilter = prefilter
         self.updown = updown
         self.handle_ties = handle_ties
         self.disjoint = disjoint
+        self.feature_groups = feature_groups
 
     def _fit_pairs(self, X, y):
         X = validate_data(self, X, dtype=float)
@@ -275,21 +277,51 @@ class _KTSPBase(BaseEstimator):
         if (krange < 1).any():
             raise ValueError("k must be >= 1")
 
-        cols = np.arange(X.shape[1])
-        if self.prefilter is not None:
-            cols = wilcoxon_filter(X, y, self.prefilter, updown=self.updown, classes=self.classes_)
-        if len(cols) < 4:
-            raise ValueError("k-TSP needs at least 4 features after filtering")
-        score, tie_vote = tsp_scores(X[:, cols], y, handle_ties=self.handle_ties, classes=self.classes_)
-        pairs, scores, ties = _top_pairs(score, tie_vote, int(krange.max()), self.disjoint)
-        pairs = cols[pairs]
+        maxk = int(krange.max())
+        if self.feature_groups is None:
+            pairs, scores, ties = self._pairs_within(X, y, np.arange(X.shape[1]), self.prefilter, maxk)
+            self.pair_groups_ = None
+        else:
+            groups = np.asarray(self.feature_groups)
+            if groups.shape != (X.shape[1],):
+                raise ValueError(f"feature_groups must have one label per feature ({X.shape[1]}), got {groups.shape}")
+            found = []
+            for g in dict.fromkeys(groups.tolist()):
+                idx = np.flatnonzero(groups == g)
+                n_pre = self.prefilter.get(g) if isinstance(self.prefilter, dict) else self.prefilter
+                if len(idx) < 4 or (n_pre is not None and n_pre < 4):
+                    continue
+                found.append((g, *self._pairs_within(X, y, idx, n_pre, maxk)))
+            if not found:
+                raise ValueError("no feature group has at least 4 features")
+            # pairs are formed inside a group only (same scale); the groups compete by their TSP score
+            all_pairs = np.vstack([f[1] for f in found])
+            all_scores = np.concatenate([f[2] for f in found])
+            all_ties = np.concatenate([f[3] for f in found])
+            labels = np.concatenate([[f[0]] * len(f[1]) for f in found])
+            order = np.argsort(-all_scores, kind="stable")[:maxk]
+            pairs, scores, ties = all_pairs[order], all_scores[order], all_ties[order]
+            self.pair_groups_ = labels[order]
         k = int(krange[0]) if len(krange) == 1 else _choose_k(X, y, self.classes_, pairs, ties, krange)
         k = min(k, len(pairs))
         self.k_ = k
+        if self.pair_groups_ is not None:
+            self.pair_groups_ = self.pair_groups_[:k]
         self.pairs_ = pairs[:k]
         self.scores_ = scores[:k]
         self.tie_votes_ = ties[:k]
         return X
+
+    def _pairs_within(self, X, y, idx, n_pre, maxk):
+        """Top pairs among the features ``idx`` (optionally pre-filtered), as global column indices."""
+        cols = idx
+        if n_pre is not None:
+            cols = idx[wilcoxon_filter(X[:, idx], y, n_pre, updown=self.updown, classes=self.classes_)]
+        if len(cols) < 4:
+            raise ValueError("k-TSP needs at least 4 features after filtering")
+        score, tie_vote = tsp_scores(X[:, cols], y, handle_ties=self.handle_ties, classes=self.classes_)
+        pairs, scores, ties = _top_pairs(score, tie_vote, maxk, self.disjoint)
+        return cols[pairs], scores, ties
 
     def _input_names(self, input_features=None):
         if input_features is not None:
@@ -320,13 +352,16 @@ class _KTSPBase(BaseEstimator):
 
         check_is_fitted(self, "pairs_")
         names = self._input_names(input_features)
-        return pd.DataFrame({
+        out = pd.DataFrame({
             "a": names[self.pairs_[:, 0]],
             "b": names[self.pairs_[:, 1]],
             "comparison": np.where(self.tie_votes_ == _TIE_FIRST, ">=", ">"),
             "score": self.scores_,
             "tie_vote": self.tie_votes_,
         })
+        if self.pair_groups_ is not None:
+            out.insert(0, "group", self.pair_groups_)
+        return out
 
     def _votes(self, X):
         check_is_fitted(self, "pairs_")
@@ -353,21 +388,31 @@ class KTSP(TransformerMixin, _KTSPBase):
         Number of pairs. A sequence is switchBox's ``krange``: pairs are chosen
         for ``max(k)`` and the best ``k`` is picked by a t-like separation
         criterion on the training votes.
-    prefilter : int, optional
+    prefilter : int or dict, optional
         Keep only this many features before pairing, via the switchBox Wilcoxon
         filter (``SWAP.Filter.Wilcoxon``, ``featureNo``). ``None`` = no filter
-        (switchBox's default is 100). Pair scoring is O(n_features**2).
+        (switchBox's default is 100). Pair scoring is O(n_features**2). With
+        ``feature_groups`` the number applies per group; a dict ``{group: n}``
+        sets it per group (groups missing from the dict are not filtered).
     updown : bool
         Wilcoxon filter keeps half up-, half down-shifted features.
     handle_ties : bool
         switchBox ``handleTies``. Recommended for zero-inflated count data.
     disjoint : bool
         Each feature appears in at most one pair.
+    feature_groups : array-like of labels, optional
+        One label per feature (column), e.g. the data type: ``"expression"``,
+        ``"cna"``, ``"mutation"``. Pairs are formed only **between features of
+        the same group**, because only features on the same scale can be ordered
+        meaningfully within a sample. The groups compete for the ``k`` places by
+        their TSP score (the score is a difference of order frequencies, on the
+        same scale for every group). Use ``handle_ties=True`` with binary
+        features. ``get_pairs`` then has a ``group`` column.
 
     Attributes
     ----------
-    classes_, k_, pairs_ (column indices), scores_, tie_votes_; see
-    :meth:`get_pairs` for a readable table.
+    classes_, k_, pairs_ (column indices), scores_, tie_votes_, pair_groups_
+    (group of each pair, or None); see :meth:`get_pairs` for a readable table.
     """
 
     def fit(self, X, y):

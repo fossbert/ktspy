@@ -33,8 +33,9 @@ class MultiKTSPClassifier(ClassifierMixin, BaseEstimator):
     prefilter : int, optional
         Keep this many features per class pair before pairing (switchBox Wilcoxon filter).
         Pair scoring is O(n_features**2): use it for genome-wide data.
-    updown, handle_ties, disjoint :
-        As in :class:`ktspy.KTSP`.
+    updown, handle_ties, disjoint, feature_groups :
+        As in :class:`ktspy.KTSP`. With ``feature_groups`` (e.g. expression, copy number, mutation) the
+        pairs of each rule come from the groups; the ``rules_`` table has a ``group`` column.
     voting : {"soft", "hard"}
         ``"soft"`` (default): the score of a class is the sum, over the class pairs it belongs to, of
         the share of that classifier's pairs voting for it. ``"hard"``: number of won class-pair
@@ -49,13 +50,15 @@ class MultiKTSPClassifier(ClassifierMixin, BaseEstimator):
     """
 
     def __init__(self, k: Union[int, Sequence[int]] = 5, *, prefilter=None, updown: bool = True,
-                 handle_ties: bool = False, disjoint: bool = True, voting: str = "soft"):
+                 handle_ties: bool = False, disjoint: bool = True, voting: str = "soft",
+                 feature_groups=None):
         self.k = k
         self.prefilter = prefilter
         self.updown = updown
         self.handle_ties = handle_ties
         self.disjoint = disjoint
         self.voting = voting
+        self.feature_groups = feature_groups
 
     def fit(self, X, y):
         if self.voting not in ("soft", "hard"):
@@ -76,7 +79,8 @@ class MultiKTSPClassifier(ClassifierMixin, BaseEstimator):
         for a, b in combinations(self.classes_, 2):
             m = (y == a) | (y == b)
             est = KTSPClassifier(k=self.k, prefilter=self.prefilter, updown=self.updown,
-                                 handle_ties=self.handle_ties, disjoint=self.disjoint).fit(X[m], y[m])
+                                 handle_ties=self.handle_ties, disjoint=self.disjoint,
+                                 feature_groups=self.feature_groups).fit(X[m], y[m])
             self.estimators_[(a, b)] = est
             pairs = est.get_pairs(self._names)
             pairs.insert(0, "class_b", b)
