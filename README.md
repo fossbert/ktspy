@@ -49,6 +49,24 @@ clf.explain(X_new.iloc[[0]])            # every pair, the two values compared, a
   indicators as features for any other classifier). `k` may be a sequence (switchBox `krange`).
 - All estimators follow the scikit-learn API (pipelines, `clone`, cross-validation).
 
+## k-TSP as a feature for other models (`KTSPScore`)
+
+`KTSPScore` turns a block of features into the vote share of its k-TSP pairs (one column for two classes, one
+per class except the first otherwise) so that it can compete with other data types in a penalised model. The
+scores of the training samples are **out-of-fold** (`cross_fit=True`): each comes from a k-TSP model that did not
+see the sample, otherwise the downstream model sees optimistic scores and over-weights this block.
+
+```python
+ColumnTransformer([("expr", Pipeline([("k", KTSPScore(k=5, prefilter=300)), ("sc", StandardScaler())]), expr_cols),
+                   ("cna",  Pipeline([("k", KTSPScore(k=5, prefilter=300, handle_ties=True)), ("sc", StandardScaler())]), cna_cols),
+                   ("mut",  "passthrough", mut_cols),
+                   ("clin", Pipeline([("imp", SimpleImputer()), ("sc", StandardScaler())]), clin_cols)])
+# -> elastic-net logistic regression; transformer_weights act like penalty factors per block
+```
+
+Scores are computed from one sample only, so the single-sample property holds for the k-TSP blocks (the scalers
+store a training reference). The rules stay readable: `pipe.named_steps["ct"].named_transformers_["expr"][0].get_pairs()`.
+
 ## Several feature types (expression, copy number, mutations, ...)
 
 Only features on the same scale can be ordered within a sample, so pairs are formed **inside** a group

@@ -7,12 +7,14 @@ are unchanged by any monotone per-sample transformation (library size, log, ...)
 sample can be classified.
 
 * :class:`KTSPClassifier`, :class:`KTSP` -- two classes, port of Bioconductor ``switchBox``
+* :class:`KTSPScore` -- the vote share as a feature (optionally out-of-fold) for a downstream model
 * :class:`MultiKTSPClassifier` -- more than two classes (one-vs-one, soft voting), with
   :meth:`~MultiKTSPClassifier.explain` for the vote of every gene pair
 """
 
 from .core import KTSP, KTSPClassifier, tsp_scores, wilcoxon_filter
 from .multiclass import MultiKTSPClassifier
+from .transformers import KTSPScore
 
 __version__ = "0.1.0"
-__all__ = ["KTSP", "KTSPClassifier", "MultiKTSPClassifier", "tsp_scores", "wilcoxon_filter"]
+__all__ = ["KTSP", "KTSPClassifier", "MultiKTSPClassifier", "KTSPScore", "tsp_scores", "wilcoxon_filter"]

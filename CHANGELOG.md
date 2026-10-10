@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- `KTSPScore`: k-TSP vote share as a feature (binary: one column; multiclass: one per class but the first) for a
+  downstream model, out-of-fold for the training samples by default (`cross_fit`); keeps feature names so that
+  `get_pairs()` shows genes inside a `ColumnTransformer`.
+
 - `feature_groups` (`KTSP`, `KTSPClassifier`, `MultiKTSPClassifier`): one label per feature; pairs are formed
   only within a group (same scale), the groups compete by TSP score; `prefilter` per group (int or dict);
   `pair_groups_`, a `group` column in `get_pairs()` / `rules_`.
